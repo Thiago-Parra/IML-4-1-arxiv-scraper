@@ -1,0 +1,37 @@
+[tool.poetry]
+name = "iml41-arxiv-scraper"
+version = "1.0.0"
+description = "Web scraper for recent arXiv Computation and Language (cs.CL) submissions."
+authors = ["Thiago Parra"]
+readme = "README.md"
+packages = [{ include = "arxiv_scraper", from = "src" }]
+
+[tool.poetry.dependencies]
+python = ">=3.12,<3.14"
+beautifulsoup4 = "^4.13.5"
+pydantic = "^2.11.7"
+pydantic-settings = "^2.10.1"
+requests = "^2.32.5"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.2"
+ruff = "^0.13.2"
+pre-commit = "^4.3.0"
+
+[tool.poetry.scripts]
+arxiv-scraper = "arxiv_scraper.cli:main"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
