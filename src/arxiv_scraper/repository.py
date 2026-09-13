@@ -40,7 +40,12 @@ class CsvArticleRepository(ArticleRepository):
         self.output_file.parent.mkdir(parents=True, exist_ok=True)
 
         with self.output_file.open("w", encoding="utf-8", newline="") as file:
-            writer = csv.DictWriter(file, fieldnames=self.FIELDNAMES)
+            writer = csv.DictWriter(
+                file,
+                fieldnames=self.FIELDNAMES,
+                delimiter="|",
+                quoting=csv.QUOTE_MINIMAL,
+            )
             writer.writeheader()
             for article in articles:
                 row = article.model_dump(mode="json")

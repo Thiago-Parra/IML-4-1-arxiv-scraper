@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
@@ -12,6 +13,8 @@ import requests
 from bs4 import BeautifulSoup, Tag
 
 from .models import Article
+
+logger = logging.getLogger(__name__)
 
 
 class Scraper(ABC):
@@ -44,15 +47,44 @@ class ArxivScraper(Scraper):
         articles: list[Article] = []
         current_url = self.source_url
 
-        for _ in range(self.max_pages):
+        pages_processed = 0
+
+        for page_number in range(1, self.max_pages + 1):
+            current_url = self._build_page_url(page_number)
+
+            logger.info(
+                "Scraping page %d/%d: %s",
+                page_number,
+                self.max_pages,
+                current_url,
+            )
+
             html = self._get(current_url)
             page_articles = self._parse_page(html)
-            articles.extend(page_articles)
 
-            next_url = self._get_next_page(html, current_url)
-            if not next_url:
+            logger.info(
+                "Page %d/%d: collected %d articles",
+                page_number,
+                self.max_pages,
+                len(page_articles),
+            )
+
+            if not page_articles:
+                logger.warning(
+                    "Page %d/%d returned no articles. Stopping pagination.",
+                    page_number,
+                    self.max_pages,
+                )
                 break
-            current_url = next_url
+
+            articles.extend(page_articles)
+            pages_processed = page_number
+
+        logger.info(
+            "Scraping finished: %d pages processed, %d articles collected",
+            pages_processed,
+            len(articles),
+        )
 
         return articles
 
@@ -62,32 +94,75 @@ class ArxivScraper(Scraper):
         return response.text
 
     def _parse_page(self, html: str) -> list[Article]:
+        """Parse the current arXiv list-page structure."""
         soup = BeautifulSoup(html, "html.parser")
-        entries = soup.select("li.arxiv-result")
+        entries = soup.select("dl > dt")
         scraped_at = datetime.now(UTC)
-        return [
-            self._parse_entry(entry, scraped_at)
-            for entry in entries
-        ]
 
-    def _parse_entry(self, entry: Tag, scraped_at: datetime) -> Article:
-        title = self._clean_text(entry.select_one("p.title"))
-        authors = [self._clean_text(author) for author in entry.select("p.authors a")]
-        comments = self._extract_labeled_text(entry, "Comments")
-        subjects = self._extract_subjects(entry)
+        articles: list[Article] = []
 
-        abs_link = entry.select_one("p.list-title a")
-        if not isinstance(abs_link, Tag) or not abs_link.get("href"):
+        for dt in entries:
+            dd = dt.find_next_sibling("dd")
+
+            if not isinstance(dd, Tag):
+                continue
+
+            try:
+                articles.append(self._parse_entry(dt, dd, scraped_at))
+            except ValueError:
+                # Ignore malformed entries while allowing the page
+                # to continue processing the remaining submissions.
+                continue
+
+        return articles
+
+    def _parse_entry(
+        self,
+        dt: Tag,
+        dd: Tag,
+        scraped_at: datetime,
+    ) -> Article:
+        """Parse one arXiv submission from its dt/dd pair."""
+        title = self._clean_text(dd.select_one("div.list-title")).removeprefix("Title:").strip()
+
+        authors = [self._clean_text(author) for author in dd.select("div.list-authors a")]
+
+        comments_node = dd.select_one("div.list-comments")
+        subjects_node = dd.select_one("div.list-subjects")
+
+        comments = self._clean_text(comments_node) if isinstance(comments_node, Tag) else None
+        if comments:
+            comments = comments.removeprefix("Comments:").strip() or None
+
+        subjects = self._clean_text(subjects_node) if isinstance(subjects_node, Tag) else "Unknown"
+        subjects = subjects.removeprefix("Subjects:").strip() or "Unknown"
+
+        if not title:
+            raise ValueError("arXiv entry without a title")
+
+        abs_link = dt.select_one('a[href*="/abs/"]')
+
+        if not isinstance(abs_link, Tag):
             raise ValueError("arXiv entry without abstract link")
 
-        abstract_url = urljoin("https://arxiv.org", abs_link["href"])
-        match = re.search(r"arxiv\.org/abs/([^/?#]+)", abstract_url)
+        href = abs_link.get("href")
+        if not isinstance(href, str) or not href:
+            raise ValueError("arXiv entry with invalid abstract link")
+
+        abstract_url = urljoin(
+            "https://arxiv.org",
+            href,
+        )
+
+        match = re.search(
+            r"arxiv\.org/abs/([^/?#]+)",
+            abstract_url,
+        )
+
         if not match:
             raise ValueError(f"Could not extract arXiv id from URL: {abstract_url}")
 
         arxiv_id = match.group(1)
-        pdf_url = f"https://arxiv.org/pdf/{arxiv_id}"
-        html_url = f"https://arxiv.org/html/{arxiv_id}"
 
         return Article(
             arxiv_id=arxiv_id,
@@ -95,33 +170,25 @@ class ArxivScraper(Scraper):
             authors=authors,
             comments=comments,
             subjects=subjects,
-            pdf_url=pdf_url,
-            html_url=html_url,
+            pdf_url=f"https://arxiv.org/pdf/{arxiv_id}",
+            html_url=f"https://arxiv.org/html/{arxiv_id}",
             source_url=self.source_url,
             scraped_at=scraped_at,
         )
 
-    @staticmethod
-    def _clean_text(node: Any) -> str:
+    def _clean_text(self, node: Any) -> str:
         if not isinstance(node, Tag):
             return ""
         return " ".join(node.get_text(" ", strip=True).split())
 
-    def _extract_labeled_text(self, entry: Tag, label: str) -> str | None:
-        prefix = f"{label}:"
-        for paragraph in entry.select("p.comments, div.meta, p"):
-            text = self._clean_text(paragraph)
-            if text.startswith(prefix):
-                value = text[len(prefix) :].strip()
-                return value or None
-        return None
+    def _build_page_url(self, page_number: int) -> str:
+        """Build an arXiv list URL for a one-based page number."""
+        if page_number < 1:
+            raise ValueError("page_number must be greater than or equal to 1")
 
-    def _extract_subjects(self, entry: Tag) -> str:
-        subject_block = entry.select_one("div.tags")
-        if not isinstance(subject_block, Tag):
-            return "Unknown"
-        tags = [self._clean_text(tag) for tag in subject_block.select("span.tag")]
-        return "; ".join(tag for tag in tags if tag) or "Unknown"
+        skip = (page_number - 1) * 50
+        separator = "&" if "?" in self.source_url else "?"
+        return f"{self.source_url}{separator}skip={skip}&show=50"
 
     def _get_next_page(self, html: str, current_url: str) -> str | None:
         soup = BeautifulSoup(html, "html.parser")

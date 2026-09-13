@@ -22,6 +22,7 @@ def main() -> None:
     parser.parse_args()
     configure_logging()
     settings = Settings()
+    logger.info("Configured max_pages=%d", settings.max_pages)
 
     scraper = ArxivScraper(
         source_url=settings.source_url,

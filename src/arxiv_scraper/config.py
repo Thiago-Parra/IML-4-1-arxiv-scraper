@@ -13,6 +13,6 @@ class Settings(BaseSettings):
 
     source_url: str = Field(default="https://arxiv.org/list/cs.CL/recent")
     output_file: Path = Field(default=Path("data/articles.csv"))
-    max_pages: int = Field(default=1, ge=1, le=20)
+    max_pages: int = Field(default=3, ge=1, le=20)
     timeout_seconds: float = Field(default=20.0, gt=0)
     user_agent: str = Field(default="IML4.1-Arxiv-Scraper/1.0")
