@@ -7,11 +7,12 @@ from arxiv_scraper.repository import CsvArticleRepository
 
 def test_repository_writes_csv(tmp_path) -> None:
     output = tmp_path / "articles.csv"
+
     article = Article(
         arxiv_id="1234.5678",
-        title="Example",
+        title="Example, with comma",
         authors=["A. Author", "B. Author"],
-        comments=None,
+        comments="Example comment; with semicolon",
         subjects="Computation and Language (cs.CL)",
         pdf_url="https://arxiv.org/pdf/1234.5678",
         html_url="https://arxiv.org/html/1234.5678",
@@ -21,8 +22,18 @@ def test_repository_writes_csv(tmp_path) -> None:
 
     CsvArticleRepository(output).save_all([article])
 
-    with output.open(encoding="utf-8", newline="") as file:
-        rows = list(csv.DictReader(file))
+    with output.open(
+        encoding="utf-8",
+        newline="",
+    ) as file:
+        rows = list(
+            csv.DictReader(
+                file,
+                delimiter="|",
+            )
+        )
 
     assert rows[0]["arxiv_id"] == "1234.5678"
+    assert rows[0]["title"] == "Example, with comma"
     assert rows[0]["authors"] == "A. Author; B. Author"
+    assert rows[0]["comments"] == "Example comment; with semicolon"
