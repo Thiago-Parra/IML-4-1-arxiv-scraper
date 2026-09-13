@@ -69,9 +69,9 @@ iml41-arxiv-scraper/
 ├── .gitignore
 ├── .pre-commit-config.yaml
 ├── Dockerfile
-├── LICENSE
 ├── Makefile
 ├── README.md
+├── poetry.lock
 └── pyproject.toml
 ```
 
@@ -100,8 +100,8 @@ O projeto foi organizado em componentes com responsabilidades distintas.
                      │                               │
                      ▼                               ▼
           ┌─────────────────────┐         ┌─────────────────────┐
-          │       arXiv          │         │   articles.csv      │
-          │      Web Page        │         │                     │
+          │       arXiv         │         │   articles.csv      │
+          │      Web Page       │         │                     │
           └─────────────────────┘         └─────────────────────┘
 ```
 
@@ -168,8 +168,8 @@ Para executar o projeto localmente, são necessários:
 Clone o repositório:
 
 ```bash
-git clone <URL_DO_REPOSITORIO>
-cd iml41-arxiv-scraper
+git clone https://github.com/Thiago-Parra/IML-4-1-arxiv-scraper.git
+cd IML-4-1-arxiv-scraper
 ```
 
 Instale as dependências:
@@ -190,37 +190,17 @@ Ou execute os comandos diretamente através do Poetry:
 poetry run <comando>
 ```
 
-## Configuração
-
-As configurações podem ser definidas por variáveis de ambiente.
-
-Um arquivo de exemplo está disponível em:
-
-```text
-.env.example
-```
-
-Exemplo:
-
-```env
-SOURCE_URL=https://arxiv.org/list/cs.CL/recent
-OUTPUT_FILE=data/articles.csv
-MAX_PAGES=10
-TIMEOUT_SECONDS=20
-USER_AGENT=IML4.1-Arxiv-Scraper/1.0
-```
-
 ### Configurações disponíveis
 
 | Variável | Padrão | Descrição |
 |---|---|---|
-| `SOURCE_URL` | `https://arxiv.org/list/cs.CL/recent` | URL da listagem do arXiv |
-| `OUTPUT_FILE` | `data/articles.csv` | Arquivo de saída |
-| `MAX_PAGES` | `10` | Quantidade máxima de páginas processadas |
-| `TIMEOUT_SECONDS` | `20` | Timeout das requisições HTTP |
-| `USER_AGENT` | `IML4.1-Arxiv-Scraper/1.0` | User-Agent utilizado nas requisições |
+| `source_url` | `https://arxiv.org/list/cs.CL/recent` | URL da listagem do arXiv |
+| `output_file` | `data/articles.csv` | Arquivo de saída |
+| `max_pages` | `10` | Quantidade máxima de páginas processadas |
+| `timeout_seconds` | `20` | Timeout das requisições HTTP |
+| `user_agent` | `IML4.1-Arxiv-Scraper/1.0` | User-Agent utilizado nas requisições |
 
-`MAX_PAGES` aceita valores entre `1` e `20`.
+`max_pages` aceita valores entre `1` e `20`.
 
 Como cada página possui até 50 artigos, o valor padrão de 10 páginas permite coletar até aproximadamente 500 artigos por execução.
 
@@ -293,8 +273,7 @@ Os testes verificam, entre outros pontos:
 - geração das URLs de paginação;
 - respeito ao limite de páginas configurado;
 - interrupção da paginação quando não existem artigos;
-- geração correta do arquivo CSV;
-- tratamento de campos contendo vírgulas e ponto e vírgula.
+- geração correta do arquivo CSV.
 
 Os testes do scraper utilizam um arquivo HTML de fixture:
 
@@ -362,12 +341,6 @@ make scrape
 make test
 make lint
 make format
-```
-
-Para visualizar os comandos disponíveis:
-
-```bash
-make help
 ```
 
 ## Docker
@@ -526,28 +499,6 @@ Os hooks permitem validar o código antes dos commits.
 
 O GitHub Actions permite automatizar a validação e publicação da aplicação.
 
-## Tratamento de erros e interrupção da paginação
-
-Durante a coleta, o scraper verifica se a página processada contém artigos.
-
-Quando uma página não retorna artigos, a execução da paginação é interrompida.
-
-Exemplo de comportamento:
-
-```text
-Scraping page 1/10
-Page 1/10: collected 50 articles
-
-Scraping page 2/10
-Page 2/10: collected 50 articles
-
-Scraping page 3/10
-Page 3/10: collected 0 articles
-Stopping pagination.
-```
-
-Essa abordagem evita requisições desnecessárias quando não existem mais resultados disponíveis.
-
 ## Exemplo completo de execução
 
 Um fluxo completo utilizando Poetry pode ser executado da seguinte forma:
@@ -574,10 +525,7 @@ make scrape
 ```bash
 docker build -t iml41-arxiv-scraper .
 
-docker run --rm \
-  -e MAX_PAGES=3 \
-  -v "$PWD/data:/app/data" \
-  iml41-arxiv-scraper
+docker run --rm -v "$PWD/data:/app/data" iml41-arxiv-scraper
 ```
 
 Após a execução:
